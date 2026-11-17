@@ -1,3 +1,4 @@
+
 "use server";
 
 import { supabase } from "@/lib/supabase/server";
@@ -7,6 +8,7 @@ export async function createCustomer({ name, phone, businessId }) {
     const customerName = name?.trim();
     const customerPhone = phone?.trim();
 
+    // 1. Validate customer details
     if (!customerName || !customerPhone || !businessId) {
       return {
         success: false,
@@ -21,9 +23,10 @@ export async function createCustomer({ name, phone, businessId }) {
       };
     }
 
+    // 2. Fetch business details
     const { data: business, error: businessError } = await supabase
       .from("businesses")
-      .select("id, google_review_url")
+      .select("id, shop_name, google_review_url")
       .eq("id", businessId)
       .single();
 
@@ -34,6 +37,39 @@ export async function createCustomer({ name, phone, businessId }) {
       };
     }
 
+    // 3. Check whether customer already exists
+    const { data: existingCustomer, error: checkError } = await supabase
+      .from("customers")
+      .select("id, name, phone")
+      .eq("business_id", businessId)
+      .eq("phone", customerPhone)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("Customer check error:", checkError);
+
+      return {
+        success: false,
+        message: "Unable to verify customer. Please try again.",
+      };
+    }
+
+    // CASE 2: Existing customer
+    // No insert, no WhatsApp API call, no reminder scheduling
+    if (existingCustomer) {
+      return {
+        success: true,
+        message: "Customer already registered.",
+        data: existingCustomer,
+        googleReviewUrl: business.google_review_url || null,
+        reminderScheduled: false,
+        alreadyRegistered: true,
+      };
+    }
+
+    // CASE 1: New customer
+
+    // 4. Save new customer in Supabase
     const { data: customer, error: customerError } = await supabase
       .from("customers")
       .insert({
@@ -44,7 +80,7 @@ export async function createCustomer({ name, phone, businessId }) {
       .select("id, business_id, name, phone, created_at")
       .single();
 
-    if (customerError) {
+    if (customerError || !customer) {
       console.error("Create customer error:", customerError);
 
       return {
@@ -53,7 +89,39 @@ export async function createCustomer({ name, phone, businessId }) {
       };
     }
 
-    // Fetch business revisit message template
+    // 5. Send Thank You WhatsApp through VPS API
+    let thankYouSent = false;
+
+    try {
+      const response = await fetch(
+        `${process.env.REPEATPRO_API_URL}/api/messages/thank-you`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            businessId: business.id,
+            customerId: customer.id,
+          }),
+          cache: "no-store",
+          signal: AbortSignal.timeout(10000),
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        thankYouSent = true;
+        console.log("Thank You WhatsApp submitted:", customer.id);
+      } else {
+        console.error("Thank You WhatsApp failed:", result);
+      }
+    } catch (error) {
+      console.error("Thank You API error:", error.message);
+    }
+
+    // 6. Fetch revisit message template
     const { data: template, error: templateError } = await supabase
       .from("message_templates")
       .select("id, revisit_message")
@@ -66,17 +134,16 @@ export async function createCustomer({ name, phone, businessId }) {
 
     let reminderScheduled = false;
 
+    // 7. Schedule revisit reminder after 24 hours
     if (template?.revisit_message?.trim()) {
-      // Schedule message 7 days after registration
       const scheduledAt = new Date(
         new Date(customer.created_at).getTime() +
-          7 * 24 * 60 * 60 * 1000
+          24 * 60 * 60 * 1000
       ).toISOString();
 
-      // Replace template placeholders
       const message = template.revisit_message
         .replaceAll("{customer_name}", customerName)
-        .replaceAll("{business_name}", business.name || "");
+        .replaceAll("{business_name}", business.shop_name || "");
 
       const { error: scheduleError } = await supabase
         .from("scheduled_messages")
@@ -97,14 +164,15 @@ export async function createCustomer({ name, phone, businessId }) {
       }
     }
 
+    // 8. Return success for new customer
     return {
       success: true,
-      message: reminderScheduled
-        ? "Customer registered and revisit reminder scheduled successfully."
-        : "Customer registered successfully.",
+      message: "Customer registered successfully.",
       data: customer,
       googleReviewUrl: business.google_review_url || null,
+      thankYouSent,
       reminderScheduled,
+      alreadyRegistered: false,
     };
   } catch (error) {
     console.error("Create customer error:", error);

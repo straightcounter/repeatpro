@@ -157,7 +157,7 @@ export default function OnboardingPage() {
         </div>
 
         <div className="relative z-10 border-t border-white/20 pt-6 text-sm text-white/60">
-          © {new Date().getFullYear()} RepeatPro
+          ©  RepeatPro
         </div>
       </aside>
 
