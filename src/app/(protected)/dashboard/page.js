@@ -66,7 +66,7 @@ export default function DashboardPage() {
   }, []);
 
   const customerLink = business?.id
-    ? `${process.env.NEXT_PUBLIC_CUSTOM_URL}/customer/${business.id}`
+    ? `${process.env.NEXT_CUSTOM_URL}/customer/${business.id}`
     : "";
 
   const copyLink = async () => {
