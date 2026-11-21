@@ -136,10 +136,10 @@ export async function createCustomer({ name, phone, businessId }) {
 
     // 7. Schedule revisit reminder after 24 hours
     if (template?.revisit_message?.trim()) {
-      const scheduledAt = new Date(
-        new Date(customer.created_at).getTime() +
-          24 * 60 * 60 * 1000
-      ).toISOString();
+  const scheduledAt = new Date(
+    new Date(customer.created_at).getTime() +
+      7 * 24 * 60 * 60 * 1000
+  ).toISOString();
 
       const message = template.revisit_message
         .replaceAll("{customer_name}", customerName)

@@ -1,9 +1,9 @@
+
 "use client";
 
 import React, { useEffect, useState } from "react";
 import {
   Users,
-  Repeat2,
   Link2,
   Copy,
   Check,
@@ -14,33 +14,19 @@ import {
 } from "lucide-react";
 
 import { getBusinessDetails } from "@/app/actions/getBusinessDetails";
-
-const stats = [
-  {
-    label: "Total Customers",
-    value: "248",
-    description: "Customers added to your business",
-    icon: Users,
-  },
-  {
-    label: "Revisits Completed",
-    value: "86",
-    description: "Customers who visited again",
-    icon: Repeat2,
-  },
-];
+import { getDashboardStats } from "@/app/actions/getDashboardStats";
 
 export default function DashboardPage() {
   const [copied, setCopied] = useState(false);
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [origin, setOrigin] = useState("");
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    setOrigin(window.location.origin);
+  const [totalCustomers, setTotalCustomers] = useState(null);
+  const [statsError, setStatsError] = useState("");
 
+  useEffect(() => {
     async function loadBusiness() {
       setLoading(true);
       setError("");
@@ -62,11 +48,30 @@ export default function DashboardPage() {
       }
     }
 
+    async function loadStats() {
+      try {
+        const res = await getDashboardStats();
+
+        if (res.success) {
+          setTotalCustomers(res.data.totalCustomers);
+          setStatsError("");
+        } else {
+          setStatsError(
+            res.message || "Unable to load customers"
+          );
+        }
+      } catch (err) {
+        console.error("Dashboard stats error:", err);
+        setStatsError("Unable to load customers");
+      }
+    }
+
     loadBusiness();
+    loadStats();
   }, []);
 
   const customerLink = business?.id
-    ? `${process.env.NEXT_PUBLIC_CUSTOM_URL}/customer/${business.id}`
+    ? `${process.env.NEXT_PUBLIC_CUSTOM_URL?.replace(/\/$/, "") || ""}/customer/${business.id}`
     : "";
 
   const copyLink = async () => {
@@ -126,36 +131,34 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-[#FAF9F6] px-4 py-7 text-[#292524] sm:px-8 sm:py-10 lg:px-12">
       <div className="mx-auto max-w-6xl space-y-9">
-        {/* Statistics */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
 
-            return (
-              <div
-                key={stat.label}
-                className="rounded-2xl border border-[#E7E5E4] bg-white p-5 sm:p-6"
-              >
-                <div className="flex items-start justify-between">
-                  <span className="text-sm font-medium text-[#78716C]">
-                    {stat.label}
-                  </span>
+        {/* Total Customers */}
+        <section>
+          <div className="rounded-2xl border border-[#E7E5E4] bg-white p-5 sm:p-6">
+            <div className="flex items-start justify-between">
+              <span className="text-sm font-medium text-[#78716C]">
+                Total Customers
+              </span>
 
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F5F4] text-[#57534E]">
-                    <Icon size={19} strokeWidth={1.8} />
-                  </div>
-                </div>
-
-                <h2 className="mt-5 text-4xl font-semibold tracking-tight">
-                  {stat.value}
-                </h2>
-
-                <p className="mt-2 text-xs text-[#A8A29E]">
-                  {stat.description}
-                </p>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F5F4] text-[#57534E]">
+                <Users size={19} strokeWidth={1.8} />
               </div>
-            );
-          })}
+            </div>
+
+            <h2 className="mt-5 text-4xl font-semibold tracking-tight">
+              {totalCustomers === null ? "—" : totalCustomers}
+            </h2>
+
+            <p className="mt-2 text-xs text-[#A8A29E]">
+              Customers added to your business
+            </p>
+
+            {statsError && (
+              <p className="mt-2 text-xs text-red-500">
+                {statsError}
+              </p>
+            )}
+          </div>
         </section>
 
         {/* Customer Engagement */}
@@ -171,6 +174,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-[#E7E5E4] bg-white">
+
             {/* Customer Link */}
             <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
               <div className="flex min-w-0 items-start gap-3">
@@ -183,7 +187,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-sm font-semibold">Customer Link</h3>
+                  <h3 className="text-sm font-semibold">
+                    Customer Link
+                  </h3>
 
                   <p className="mt-1 text-xs text-[#A8A29E]">
                     Share this link with your customers.
@@ -196,7 +202,9 @@ export default function DashboardPage() {
                   </p>
 
                   {error && (
-                    <p className="mt-2 text-xs text-red-500">{error}</p>
+                    <p className="mt-2 text-xs text-red-500">
+                      {error}
+                    </p>
                   )}
                 </div>
               </div>
@@ -234,7 +242,9 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold">QR Code</h3>
+                  <h3 className="text-sm font-semibold">
+                    QR Code
+                  </h3>
 
                   <p className="mt-1 text-xs leading-relaxed text-[#A8A29E]">
                     Download your unique QR code and display it at your shop.
@@ -248,7 +258,6 @@ export default function DashboardPage() {
                 className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292524] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#44403C] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={16} />
-
                 {downloading ? "Downloading..." : "Download QR"}
               </button>
             </div>
@@ -278,7 +287,9 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold">WhatsApp</h3>
+                <h3 className="text-sm font-semibold">
+                  WhatsApp
+                </h3>
 
                 <p className="mt-1 text-xs text-[#A8A29E]">
                   Customer messaging and reminders
